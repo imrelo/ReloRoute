@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { arch, platform, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
@@ -10,11 +10,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, "..", "..");
+const electronPackage = JSON.parse(readFileSync(join(ROOT, "electron", "package.json"), "utf8"));
+const PRODUCT_NAME = electronPackage.build.productName;
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const DEFAULT_SETTLE_MS = 2_000;
 const DEFAULT_URL = "http://127.0.0.1:20128/login";
-export const LINUX_EXECUTABLE_NAMES = ["omniroute-desktop", "omniroute", "OmniRoute"];
+export const LINUX_EXECUTABLE_NAMES = [
+  electronPackage.name,
+  PRODUCT_NAME,
+  PRODUCT_NAME.toLowerCase(),
+];
 export const FATAL_LOG_PATTERNS = [
   /Cannot find module/i,
   /MODULE_NOT_FOUND/,
@@ -44,13 +50,13 @@ function discoverMacExecutable() {
     join(
       distDir,
       arch() === "arm64" ? "mac-arm64" : "mac",
-      "OmniRoute.app",
+      PRODUCT_NAME + ".app",
       "Contents",
       "MacOS",
-      "OmniRoute"
+      PRODUCT_NAME
     ),
-    join(distDir, "mac", "OmniRoute.app", "Contents", "MacOS", "OmniRoute"),
-    join(distDir, "mac-arm64", "OmniRoute.app", "Contents", "MacOS", "OmniRoute"),
+    join(distDir, "mac", PRODUCT_NAME + ".app", "Contents", "MacOS", PRODUCT_NAME),
+    join(distDir, "mac-arm64", PRODUCT_NAME + ".app", "Contents", "MacOS", PRODUCT_NAME),
   ];
 
   return candidates.find((candidate) => existsSync(candidate)) || candidates[0];
@@ -85,14 +91,14 @@ function findExecutableByName(rootDir, names) {
 function discoverWindowsExecutable() {
   const distDir = join(ROOT, "electron", "dist-electron");
   const candidates = [
-    join(distDir, "win-unpacked", "OmniRoute.exe"),
-    join(distDir, "win-x64-unpacked", "OmniRoute.exe"),
-    join(distDir, "win-arm64-unpacked", "OmniRoute.exe"),
+    join(distDir, "win-unpacked", PRODUCT_NAME + ".exe"),
+    join(distDir, "win-x64-unpacked", PRODUCT_NAME + ".exe"),
+    join(distDir, "win-arm64-unpacked", PRODUCT_NAME + ".exe"),
   ];
 
   return (
     candidates.find((candidate) => existsSync(candidate)) ||
-    findExecutableByName(distDir, ["OmniRoute.exe"]) ||
+    findExecutableByName(distDir, [PRODUCT_NAME + ".exe"]) ||
     candidates[0]
   );
 }

@@ -1,14 +1,14 @@
 {
   "name": "omniroute-desktop",
   "version": "3.8.53",
-  "description": "OmniRoute Desktop Application",
+  "description": "ReloRoute Desktop Application",
   "main": "main.js",
   "author": {
     "name": "OmniRoute Team",
     "email": "support@omniroute.online"
   },
   "license": "MIT",
-  "homepage": "https://omniroute.online",
+  "homepage": "https://github.com/imrelo/ReloRoute",
   "engines": {
     "node": ">=22.22.2 <23 || >=24.0.0 <27"
   },
@@ -40,8 +40,8 @@
     "undici": "^7.29.0"
   },
   "build": {
-    "appId": "online.omniroute.desktop",
-    "productName": "OmniRoute",
+    "appId": "io.github.imrelo.reloroute",
+    "productName": "ReloRoute",
     "copyright": "Copyright © 2025 OmniRoute",
     "buildDependenciesFromSource": false,
     "npmRebuild": false,
@@ -52,8 +52,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "diegosouzapw",
-      "repo": "OmniRoute"
+      "owner": "imrelo",
+      "repo": "ReloRoute"
     },
     "files": [
       "main.js",

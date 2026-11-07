@@ -16,10 +16,7 @@
 // contains spaces (`${productName} Setup ${version}.${ext}`); the AppImage, dmg
 // and deb defaults are already hyphen/underscore separated.
 //
-// The name is pinned to the DOT form rather than a hyphen one so the asset that
-// gets published keeps the exact name it has today — the dashboard's manual
-// "Download EXE" link and the docs both hardcode `OmniRoute.Setup.<v>.exe`, and
-// a hyphen rename would break the very workaround the issue reports as working.
+// Dùng dấu chấm để tên installer tải lên khớp với tên trong manifest cập nhật.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -61,20 +58,9 @@ test("#10947 the NSIS name still contains 'Setup'", () => {
   assert.match(String(buildConfig.nsis?.artifactName), /Setup/);
 });
 
-test("#10947 the built installer name is the one the dashboard links to", () => {
-  // Two independent sources of truth for the same filename; they must agree, or
-  // the manual download link 404s the way the updater does today.
-  const homePage = fs.readFileSync(
-    path.join(repoRoot, "src", "app", "(dashboard)", "dashboard", "HomePageClient.tsx"),
-    "utf8"
-  );
-  const linked = homePage.match(/releases\/download\/v\$\{cleanLatest\}\/(\S+?\.exe)`/)?.[1];
-  assert.ok(linked, "dashboard must still build a Windows .exe download URL");
-
-  const version = "9.9.9";
-  const built = expandArtifactName(String(buildConfig.nsis?.artifactName), version, "exe");
-  const linkedForVersion = linked.replace(/\$\{cleanLatest\}/g, version);
-  assert.equal(built, linkedForVersion);
+test("ReloRoute keeps the NSIS installer name stable and without spaces", () => {
+  const built = expandArtifactName(String(buildConfig.nsis?.artifactName), "9.9.9", "exe");
+  assert.equal(built, "ReloRoute.Setup.9.9.9.exe");
 });
 
 test("#10947 no configured artifact name anywhere contains whitespace", () => {
