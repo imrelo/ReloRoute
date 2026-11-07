@@ -25,6 +25,7 @@ import { glm_cnProvider } from "./registry/glm/cn/index.ts";
 import { agnes_cnProvider } from "./registry/agnes/cn/index.ts";
 import { traeProvider } from "./registry/trae/index.ts";
 import { muse_spark_webProvider } from "./registry/muse-spark-web/index.ts";
+import { muse_ai_webProvider } from "./registry/muse-ai-web/index.ts";
 import { lmarenaProvider } from "./registry/lmarena/index.ts";
 import { kilocodeProvider } from "./registry/kilocode/index.ts";
 import { workbuddyProvider } from "./registry/workbuddy/index.ts";
@@ -317,6 +318,7 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   "glm-cn": glm_cnProvider,
   trae: traeProvider,
   "muse-spark-web": muse_spark_webProvider,
+  "muse-ai-web": muse_ai_webProvider,
   lmarena: lmarenaProvider,
   kilocode: kilocodeProvider,
   workbuddy: workbuddyProvider,

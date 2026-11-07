@@ -7,6 +7,7 @@ import { Button, Card, Input, Toggle } from "@/shared/components";
 import Icon from "@/shared/components/Icon";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { useIsElectron } from "@/shared/hooks/useElectron";
+import { APP_CONFIG } from "@/shared/constants/appConfig";
 import {
   COMBO_CONFIG_MODE_SETTING_KEY,
   normalizeComboConfigMode,
@@ -486,9 +487,9 @@ export default function AppearanceTab() {
               <Input
                 type="text"
                 aria-label={t("appName")}
-                value={settings.instanceName || "OmniRoute"}
+                value={settings.instanceName || APP_CONFIG.name}
                 onChange={(e) => updateSetting("instanceName", e.target.value)}
-                placeholder="OmniRoute"
+                placeholder={APP_CONFIG.name}
                 maxLength={100}
                 className="w-48 shrink-0"
               />

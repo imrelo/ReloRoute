@@ -2,6 +2,7 @@
 
 import Icon from "@/shared/components/Icon";
 import { OmniRouteLockup } from "@/shared/components/OmniRouteLogo";
+import { APP_CONFIG } from "@/shared/constants/appConfig";
 
 import { useTranslations } from "next-intl";
 
@@ -219,7 +220,7 @@ export default function LoginPage() {
           </Card>
 
           <p className="text-center text-xs text-text-muted mt-8">
-            OmniRoute — {t("unifiedProxy")}
+            {APP_CONFIG.name} — {t("unifiedProxy")}
           </p>
         </div>
       </div>
@@ -255,7 +256,7 @@ export default function LoginPage() {
           </Card>
 
           <p className="text-center text-xs text-text-muted mt-8">
-            OmniRoute — {t("unifiedAiApiProxy")}
+            {APP_CONFIG.name} — {t("unifiedAiApiProxy")}
           </p>
         </div>
       </div>

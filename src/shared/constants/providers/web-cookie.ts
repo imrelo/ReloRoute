@@ -112,6 +112,18 @@ export const WEB_COOKIE_PROVIDERS = {
       "Example: ecto_1_sess=4240a308...NVDg0; ecto1:ABCD...",
     toolCalling: "emulated",
   },
+  "muse-ai-web": {
+    id: "muse-ai-web",
+    serviceKinds: ["llm"],
+    alias: "museai",
+    name: "Muse AI Web",
+    icon: "auto_awesome",
+    color: "#5548D9",
+    textIcon: "MA",
+    website: "https://muse.ai",
+    authHint: "Paste your hatch_sess value or full Cookie header from muse.ai",
+    toolCalling: "emulated",
+  },
   "claude-web": {
     id: "claude-web",
     serviceKinds: ["llm"],

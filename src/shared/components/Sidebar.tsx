@@ -673,7 +673,7 @@ export default function Sidebar({ isMacElectron = false }: SidebarProps) {
                 <OmniRouteLockup
                   name={customAppName}
                   logoSrc={customLogo}
-                  className="max-w-full flex-nowrap gap-1.5 whitespace-nowrap [&>.ci-keak-logo]:text-[1.1rem] [&>.ci-keak-product-icon]:size-7 [&_.ci-keak-product]:text-[0.95rem]"
+                  className="max-w-full flex-nowrap gap-1.5 whitespace-nowrap"
                 />
                 <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
               </>

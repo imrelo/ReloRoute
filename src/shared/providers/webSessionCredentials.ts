@@ -144,6 +144,13 @@ export const WEB_SESSION_CREDENTIAL_REQUIREMENTS = {
     acceptsFullCookieHeader: true,
     storageKeys: ["cookie", "ecto_1_sess", "abra_sess"],
   },
+  "muse-ai-web": {
+    kind: "cookie",
+    credentialName: "hatch_sess",
+    placeholder: "hatch_sess=... or full Cookie header from muse.ai",
+    acceptsFullCookieHeader: true,
+    storageKeys: ["cookie"],
+  },
   "claude-web": {
     kind: "cookie",
     credentialName: "sessionKey",

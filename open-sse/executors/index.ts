@@ -95,6 +95,8 @@ const lazyExecutors: Record<string, () => Promise<BaseExecutor>> = {
   "bb-web": () => import("./blackbox-web.ts").then((m) => new m.BlackboxWebExecutor()), // Alias
   "muse-spark-web": () => import("./muse-spark-web.ts").then((m) => new m.MuseSparkWebExecutor()),
   "ms-web": () => import("./muse-spark-web.ts").then((m) => new m.MuseSparkWebExecutor()), // Alias
+  "muse-ai-web": () => import("./muse-ai-web.ts").then((m) => new m.MuseAiWebExecutor()),
+  museai: () => import("./muse-ai-web.ts").then((m) => new m.MuseAiWebExecutor()),
   "devin-desktop": () => import("./devin-desktop.ts").then((m) => new m.DevinDesktopExecutor()),
   "zed-hosted": () => import("./zed-hosted.ts").then((m) => new m.ZedHostedExecutor()),
   "devin-cli": () => import("./devin-cli.ts").then((m) => new m.DevinCliExecutor()),

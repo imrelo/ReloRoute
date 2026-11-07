@@ -12,6 +12,7 @@ import {
 } from "@/shared/constants/providers";
 import { MODAL_DEFAULT_VALIDATION_MODEL_ID } from "@/shared/constants/modal";
 import { validateImageProviderApiKey } from "@/lib/providers/imageValidation";
+import { normalizeSessionCookieHeader } from "@/lib/providers/webCookieAuth";
 import { usesCcWireImage } from "@omniroute/open-sse/services/ccWireImageBuiltins.ts";
 import {
   isAlibabaRegionalProvider,
@@ -19,6 +20,7 @@ import {
 } from "@/shared/constants/alibabaProviderRegions";
 import { buildProviderHeaders, buildProviderUrl } from "@omniroute/open-sse/services/provider.ts";
 
+import { STANDARD_USER_AGENT } from "./validation/headers";
 import {
   OPENAI_LIKE_FORMATS,
   GEMINI_LIKE_FORMATS,
@@ -26,7 +28,7 @@ import {
   addModelsSuffix,
   resolveBaseUrl,
 } from "./validation/urlHelpers";
-import { toValidationErrorResult } from "./validation/transport";
+import { toValidationErrorResult, validationRead } from "./validation/transport";
 import { validateCloudflareAiProvider } from "./validation/cloudflareAi";
 import {
   validateDeepSeekWebProvider,
@@ -182,6 +184,65 @@ export async function validateFreebuffProvider({ apiKey }: { apiKey: string }) {
   }
 }
 
+async function validateMuseAiWebProvider({
+  apiKey,
+  providerSpecificData,
+}: {
+  apiKey?: string;
+  providerSpecificData?: Record<string, unknown>;
+}) {
+  const rawCookie = [providerSpecificData?.cookie, apiKey, providerSpecificData?.hatch_sess].find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0
+  );
+  let cookie: string;
+  try {
+    cookie = normalizeSessionCookieHeader(rawCookie ?? "", "hatch_sess");
+  } catch {
+    cookie = "";
+  }
+  if (!/(?:^|;\s*)hatch_sess=[^;\s]+/.test(cookie) || /[\r\n]/.test(cookie)) {
+    return { valid: false, error: "A Muse AI hatch_sess cookie is required", unsupported: false };
+  }
+
+  try {
+    const res = await validationRead("https://muse.ai/api/session", {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Cookie: cookie,
+        Origin: "https://muse.ai",
+        Referer: "https://muse.ai/thread/new",
+        "User-Agent": STANDARD_USER_AGENT,
+      },
+    });
+    if (res.status !== 200) {
+      await res.body?.cancel().catch(() => undefined);
+      return {
+        valid: false,
+        error:
+          res.status === 401
+            ? "SESSION_EXPIRED"
+            : `Muse AI session check failed (HTTP ${res.status})`,
+        ...(res.status === 401 ? { errorCode: "AUTH_007" } : {}),
+        statusCode: res.status,
+        unsupported: false,
+      };
+    }
+    const session = await res.json().catch(() => null);
+    if (session?.status === "assigned") return { valid: true, error: null, unsupported: false };
+    return {
+      valid: false,
+      error: "Muse AI did not return an assigned workspace session",
+      unsupported: false,
+    };
+  } catch (error) {
+    return {
+      ...toValidationErrorResult(error),
+      error: "Could not verify the Muse AI session",
+    };
+  }
+}
+
 export async function validateProviderApiKey({
   provider,
   apiKey,
@@ -193,6 +254,8 @@ export async function validateProviderApiKey({
   allowLocalSpawn = true,
 }: any) {
   provider = typeof provider === "string" ? resolveProviderId(provider) : provider;
+  if (provider === "muse-ai-web")
+    return validateMuseAiWebProvider({ apiKey, providerSpecificData });
   const requiresApiKey = !providerAllowsOptionalApiKey(provider);
   const isLocal = isLocalProvider(provider);
 

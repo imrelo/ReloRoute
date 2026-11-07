@@ -1712,7 +1712,7 @@
     "cliTools": "CLI Tools",
     "cliToolsDescription": "Configure CLI tools",
     "home": "Home",
-    "homeDescription": "Welcome to OmniRoute",
+    "homeDescription": "Welcome to ReloRoute",
     "endpoint": "Endpoints",
     "endpointDescription": "Manage proxy endpoints, MCP, A2A, and API endpoints",
     "mcp": "MCP Server",

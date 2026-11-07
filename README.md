@@ -1,3 +1,9 @@
+# ReloRoute
+
+ReloRoute is a fork of [OmniRoute](https://github.com/cheaper-inference/OmniRoute), based on v3.8.53. It adds **Muse AI Web**, a browser-backed provider exposed as `museai/muse-chat` through the OpenAI-compatible API.
+
+For local development, install dependencies with `npm ci` and run `npm run dev`. Connect a Muse session under **Providers → Web → Muse AI Web**. The API is available at `http://127.0.0.1:20128/v1` on the default port. The Muse executor needs Chrome or Playwright Chromium.
+
 <div align="center">
 
 <img src="./docs/screenshots/MainOmniRoute.png" alt="OmniRoute Dashboard" width="820"/>
@@ -5,7 +11,7 @@
 <br/>
 <br/>
 
-# 🚀 OmniRoute — The Free AI Gateway
+## Upstream OmniRoute — The Free AI Gateway
 
 **Created by [Diego Souza](https://github.com/diegosouzapw)**
 

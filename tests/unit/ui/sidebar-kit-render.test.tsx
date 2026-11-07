@@ -82,7 +82,7 @@ describe("Sidebar rendered with the kit Sidebar family", () => {
     expect(section.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(section.getAttribute("aria-controls")!)).not.toBeNull();
     expect(screen.getByRole("searchbox")).not.toBeNull();
-    expect(screen.getByRole("img", { name: "Keak OmniRoute" })).not.toBeNull();
+    expect(screen.getByRole("img", { name: "ReloRoute" })).not.toBeNull();
     expect(navEl.querySelector(".material-symbols-outlined")).toBeNull();
     expect(navEl.querySelectorAll("svg.oi-icon").length).toBeGreaterThan(5);
   });

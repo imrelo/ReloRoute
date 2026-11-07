@@ -139,6 +139,7 @@ backup/
 # (Previously /app/ was the standalone output; renamed to /dist/ in Layer 1.)
 /.build/
 /dist/
+/app/
 /.next/
 
 # Electron

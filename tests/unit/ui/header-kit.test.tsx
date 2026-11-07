@@ -44,7 +44,8 @@ describe("Header on the kit shell", () => {
       expect(header.getAttribute("role")).toBeNull();
       expect(screen.getByRole("button", { name: "Collapse sidebar" })).not.toBeNull();
       expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Providers/);
-      expect(screen.getByRole("navigation", { name: "Keak products" })).not.toBeNull();
+      const productSwitcher = screen.getByRole("navigation", { name: "Keak products" });
+      expect(productSwitcher.querySelector("summary")?.textContent).toContain("ReloRoute");
       const quickNav = screen.getAllByRole("button", { name: "Open quick navigation" });
       expect(quickNav).toHaveLength(2); // desktop outline + mobile icon (jsdom ignores md:hidden)
       fireEvent.click(quickNav[0]);

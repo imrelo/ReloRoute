@@ -314,6 +314,7 @@ const BULK_API_KEY_EXCLUDED = new Set([
   "perplexity-web",
   "blackbox-web",
   "muse-spark-web",
+  "muse-ai-web",
   "deepseek-web",
   "chatgpt-web",
   "inner-ai",

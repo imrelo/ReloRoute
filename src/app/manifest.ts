@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
 import { PWA_THEME_COLORS } from "@/shared/constants/pwaThemeColors";
+import { APP_CONFIG } from "@/shared/constants/appConfig";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "OmniRoute AI 网关",
-    short_name: "OmniRoute",
-    description: "OmniRoute 是一个面向多提供者 LLM 的 AI 网关。一个端点连接您所有的 AI 提供者。",
+    name: `${APP_CONFIG.name} AI Gateway`,
+    short_name: APP_CONFIG.name,
+    description: `${APP_CONFIG.name} is an AI gateway for multi-provider LLMs. One endpoint for all your AI providers.`,
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",
@@ -50,7 +51,7 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "1280x720",
         type: "image/png",
         form_factor: "wide",
-        label: "OmniRoute Dashboard",
+        label: `${APP_CONFIG.name} Dashboard`,
       },
     ],
   };

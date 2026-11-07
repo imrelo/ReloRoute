@@ -62,6 +62,7 @@ import {
 } from "@/shared/constants/sidebarVisibility";
 import { useIsElectron } from "@/shared/hooks/useElectron";
 import { KEAK_ACTIVE_PRODUCT, KEAK_PRODUCT_LINKS } from "@/shared/constants/keakProducts";
+import { APP_CONFIG } from "@/shared/constants/appConfig";
 import Button from "./Button";
 import Icon from "./Icon";
 
@@ -288,6 +289,7 @@ export default function Header({ onOpenCommandPalette }: HeaderProps) {
         <ProductSwitcher
           items={KEAK_PRODUCT_LINKS}
           activeProduct={KEAK_ACTIVE_PRODUCT}
+          activeLabel={APP_CONFIG.name}
           className="hidden md:block"
           aria-label={t("products")}
         />
