@@ -1,0 +1,97 @@
+name: Sync OmniRoute stable releases
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: reloroute-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  open-sync-pr:
+    if: github.repository == 'imrelo/ReloRoute' && github.ref == 'refs/heads/reloroute'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Open a pull request for the latest stable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: cheaper-inference/OmniRoute
+          BASE_BRANCH: reloroute
+        run: |
+          set -euo pipefail
+
+          tag=$(gh api "repos/$UPSTREAM/releases/latest" \
+            --jq 'select(.draft == false and .prerelease == false) | .tag_name')
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The latest upstream release does not have a stable version tag."
+            exit 1
+          fi
+
+          # Lấy commit của đúng tag, kể cả khi upstream dùng annotated tag.
+          tag_ref="refs/tags/$tag"
+          refs=$(git ls-remote --exit-code "https://github.com/$UPSTREAM.git" \
+            "$tag_ref" "$tag_ref^{}")
+          upstream_sha=$(awk -v ref="$tag_ref" '
+            $2 == ref { direct = $1 }
+            $2 == ref "^{}" { peeled = $1 }
+            END { print (peeled ? peeled : direct) }
+          ' <<< "$refs")
+          if [[ ! "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve the upstream release commit."
+            exit 1
+          fi
+
+          fork="repos/$GITHUB_REPOSITORY"
+          status=$(gh api "$fork/compare/$upstream_sha...$GITHUB_SHA?per_page=1" --jq .status)
+          case "$status" in
+            ahead|identical)
+              echo "ReloRoute already includes OmniRoute $tag." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+            behind|diverged) ;;
+            *)
+              echo "::error::GitHub returned an unexpected comparison status."
+              exit 1
+              ;;
+          esac
+
+          branch="sync/omniroute-$tag"
+          existing_pr=$(gh api --method GET "$fork/pulls" \
+            -f state=all -f base="$BASE_BRANCH" -f head="$GITHUB_REPOSITORY_OWNER:$branch" \
+            --jq '.[0].html_url // empty')
+          if [[ -n "$existing_pr" ]]; then
+            echo "OmniRoute $tag already has a sync PR: $existing_pr" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          ref="refs/heads/$branch"
+          branch_sha=$(gh api "$fork/git/matching-refs/heads/$branch" \
+            --jq ".[] | select(.ref == \"$ref\") | .object.sha")
+          if [[ -z "$branch_sha" ]]; then
+            gh api --method POST "$fork/git/refs" -f ref="$ref" -f sha="$upstream_sha" --silent
+          elif [[ "$branch_sha" != "$upstream_sha" ]]; then
+            echo "::error::The sync branch already exists at a different commit."
+            exit 1
+          fi
+
+          body=$(cat <<EOF
+          Sync [OmniRoute $tag](https://github.com/$UPSTREAM/releases/tag/$tag) at $upstream_sha.
+
+          Review changes to Muse AI Web, ReloRoute branding, and release workflows. Resolve any conflicts before merging.
+
+          Select **Create a merge commit** to retain upstream history for future syncs.
+          EOF
+          )
+          pr=$(gh api --method POST "$fork/pulls" \
+            -f title="Sync OmniRoute $tag" -f base="$BASE_BRANCH" -f head="$branch" -f body="$body" \
+            --jq .html_url)
+          echo "Opened sync PR for OmniRoute $tag: $pr" | tee -a "$GITHUB_STEP_SUMMARY"
