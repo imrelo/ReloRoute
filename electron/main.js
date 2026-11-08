@@ -21,6 +21,7 @@ const {
   app,
   BrowserWindow,
   ipcMain,
+  dialog,
   Tray,
   Menu,
   nativeImage,
@@ -44,6 +45,7 @@ const {
 } = require("./lib/remoteServerPreferences");
 const { buildReadinessUrl, probeServer, waitForServer } = require("./lib/serverReadiness");
 const { shouldRestartHealthCheck } = require("./lib/healthWatchdog");
+const { registerLocalAgent } = require("./lib/localAgent");
 const { shouldStartHidden, showOrCreateWindow } = require("./lib/windowLifecycle");
 const {
   CLOSE_BEHAVIOR_KEEP_LOADED,
@@ -80,6 +82,8 @@ const NEXT_SERVER_PATH = path.join(RESOURCES_PATH, "app");
 let mainWindow = null;
 let tray = null;
 let nextServer = null;
+let readyEmbeddedServer = null;
+let localAgentDocument = null;
 let serverPort = 20128;
 let isServerStopped = false;
 let remoteServerPromptWindow = null;
@@ -103,7 +107,30 @@ let remoteServerUrl = resolveRemoteServerUrl({
 });
 
 const getServerUrl = () => remoteServerUrl || `http://localhost:${serverPort}`;
-const getServerReadinessUrl = () => buildReadinessUrl(getServerUrl());
+// Ghim renderer vào đúng IPv4 mà tiến trình nhúng xác thực qua IPC.
+const getRendererServerUrl = () =>
+  process.platform === "win32" && app.isPackaged && !remoteServerUrl
+    ? `http://127.0.0.1:${serverPort}`
+    : getServerUrl();
+const getServerReadinessUrl = () => buildReadinessUrl(getRendererServerUrl());
+
+function getOwnedEmbeddedServer() {
+  return app.isPackaged &&
+    !remoteServerUrl &&
+    nextServer?.connected &&
+    nextServer.exitCode === null &&
+    nextServer === readyEmbeddedServer
+    ? nextServer
+    : null;
+}
+
+function isEmbeddedRendererUrl(url) {
+  try {
+    return new URL(url).origin === new URL(getRendererServerUrl()).origin;
+  } catch {
+    return false;
+  }
+}
 
 function resolveNodeExecutable(env = process.env) {
   // #1081: Ensure Next.js standalone runs using Electron's Node runtime
@@ -449,8 +476,30 @@ function createWindow({ showWhenReady = true } = {}) {
   });
   mainWindow = window;
 
+  if (process.platform === "win32" && app.isPackaged) {
+    let navigationServer = null;
+    window.webContents.on("did-start-navigation", (details) => {
+      if (!details.isMainFrame || details.isSameDocument) return;
+      localAgentDocument = null;
+      navigationServer = isEmbeddedRendererUrl(details.url) ? getOwnedEmbeddedServer() : null;
+    });
+    window.webContents.on("did-navigate", (_event, url) => {
+      if (
+        navigationServer &&
+        navigationServer === getOwnedEmbeddedServer() &&
+        isEmbeddedRendererUrl(url)
+      ) {
+        localAgentDocument = { window, server: navigationServer };
+      }
+      navigationServer = null;
+    });
+    window.webContents.on("render-process-gone", () => {
+      localAgentDocument = null;
+    });
+  }
+
   // Load the Next.js app
-  window.loadURL(resolveRendererUrl(lastRendererUrl, getServerUrl()));
+  window.loadURL(resolveRendererUrl(lastRendererUrl, getRendererServerUrl()));
   if (isDev) {
     window.webContents.openDevTools({ mode: "detach" });
   }
@@ -487,7 +536,7 @@ function createWindow({ showWhenReady = true } = {}) {
   window.on("close", (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
-      lastRendererUrl = resolveRendererUrl(window.webContents.getURL(), getServerUrl());
+      lastRendererUrl = resolveRendererUrl(window.webContents.getURL(), getRendererServerUrl());
       if (closeBehavior === CLOSE_BEHAVIOR_UNLOAD) {
         console.log("[Electron] Dashboard renderer unloaded; server remains running");
         window.destroy();
@@ -501,6 +550,7 @@ function createWindow({ showWhenReady = true } = {}) {
 
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;
+    if (localAgentDocument?.window === window) localAgentDocument = null;
   });
 
   return window;
@@ -639,9 +689,9 @@ async function changePort(newPort) {
   await waitForServer(getServerReadinessUrl());
 
   // Reload window and update tray
-  lastRendererUrl = getServerUrl();
+  lastRendererUrl = getRendererServerUrl();
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(getServerUrl());
+    mainWindow.loadURL(getRendererServerUrl());
   }
   createTray();
 
@@ -704,7 +754,7 @@ async function setRemoteServerUrl(nextUrl) {
 
   remoteServerUrl = normalized;
   writeRemoteServerUrl(REMOTE_SERVER_PREFS_PATH, remoteServerUrl);
-  lastRendererUrl = getServerUrl();
+  lastRendererUrl = getRendererServerUrl();
 
   startNextServer();
   try {
@@ -714,7 +764,7 @@ async function setRemoteServerUrl(nextUrl) {
   }
 
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(getServerUrl());
+    mainWindow.loadURL(getRendererServerUrl());
   }
   createTray();
 
@@ -876,7 +926,8 @@ function startNextServer() {
   // Fix #10: Use pipe instead of inherit for logging & readiness detection
   // windowsHide prevents a visible console window from spawning alongside the GUI app.
   // shell: false avoids launching via a shell wrapper which can flash a terminal on macOS.
-  nextServer = spawn(nodeExecutable, [serverScript], {
+  readyEmbeddedServer = null;
+  const child = spawn(nodeExecutable, [serverScript], {
     cwd: NEXT_SERVER_PATH,
     env: {
       ...serverEnv,
@@ -895,9 +946,28 @@ function startNextServer() {
       NODE_PATH: resolveServerNodePath(serverEnv, resolvePackNodePaths(dataDir)),
       NODE_OPTIONS: serverNodeOptions,
     },
-    stdio: "pipe",
+    stdio: process.platform === "win32" ? ["pipe", "pipe", "pipe", "ipc"] : "pipe",
     windowsHide: true,
     shell: false,
+  });
+  nextServer = child;
+
+  child.on("message", (message) => {
+    if (
+      child !== nextServer ||
+      readyEmbeddedServer === child ||
+      remoteServerUrl ||
+      message?.type !== "reloroute:embedded-listener-ready" ||
+      message.port !== serverPort
+    ) {
+      return;
+    }
+    readyEmbeddedServer = child;
+    // Nạp lại nếu cửa sổ mở trước khi server nhúng báo đã lắng nghe.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const url = resolveRendererUrl(mainWindow.webContents.getURL(), getRendererServerUrl());
+      void mainWindow.loadURL(url).catch(() => {});
+    }
   });
 
   // Capture server output for logging
@@ -931,7 +1001,9 @@ function startNextServer() {
     sendToRenderer("server-status", { status: "error", port: serverPort });
   });
 
-  nextServer.on("exit", (code) => {
+  child.on("exit", (code) => {
+    if (readyEmbeddedServer === child) readyEmbeddedServer = null;
+    if (nextServer !== child) return;
     console.log("[Electron] Server exited with code:", code);
     sendToRenderer("server-status", { status: "stopped", port: serverPort });
     nextServer = null;
@@ -1073,6 +1145,20 @@ function isLinuxDesktopAutostartEnabled() {
 
 // ── IPC Handlers ───────────────────────────────────────────
 function setupIpcHandlers() {
+  registerLocalAgent({
+    ipcMain,
+    dialog,
+    getMainWindow: () => mainWindow,
+    getEmbeddedServer: () => {
+      const server = getOwnedEmbeddedServer();
+      return server &&
+        localAgentDocument?.server === server &&
+        localAgentDocument.window === mainWindow
+        ? { origin: new URL(getRendererServerUrl()).origin, instance: server }
+        : null;
+    },
+  });
+
   ipcMain.handle("get-app-info", () => ({
     name: app.getName(),
     version: app.getVersion(),
@@ -1245,7 +1331,7 @@ app.whenReady().then(async () => {
   if (!isDev && !serverReady && !isHeadless && !startHidden) {
     void waitForServer(getServerReadinessUrl(), 300000).then((ready) => {
       if (ready && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(getServerUrl());
+        mainWindow.loadURL(getRendererServerUrl());
       }
     });
   }

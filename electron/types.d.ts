@@ -33,7 +33,16 @@ export interface UpdateStatus {
   [key: string]: unknown;
 }
 
+export interface LocalAgentApi {
+  isAvailable(): Promise<boolean>;
+  chooseWorkspace(): Promise<string | null>;
+  clearWorkspace(): Promise<void>;
+  readFile(path: string): Promise<{ ok: boolean; output: string }>;
+  runCommand(command: string): Promise<{ ok: boolean; output: string }>;
+}
+
 export interface ElectronAPI {
+  localAgent?: LocalAgentApi;
   // ── Invoke (async) ─────────────────────────────────────
   getAppInfo(): Promise<AppInfo>;
   openExternal(url: string): Promise<void>;

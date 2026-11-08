@@ -104,6 +104,11 @@ const VALID_CHANNELS = {
     "enable-autostart",
     "disable-autostart",
     "remote-server-prompt:get-initial-url",
+    "local-agent:available",
+    "local-agent:choose-workspace",
+    "local-agent:clear-workspace",
+    "local-agent:read-file",
+    "local-agent:run-command",
   ],
   send: [
     "window-minimize",
@@ -146,6 +151,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDataDir: () => safeInvoke("get-data-dir"),
   restartServer: () => safeInvoke("restart-server"),
   getAppVersion: () => safeInvoke("get-app-version"),
+  localAgent: {
+    isAvailable: () => safeInvoke("local-agent:available"),
+    chooseWorkspace: () => safeInvoke("local-agent:choose-workspace"),
+    clearWorkspace: () => safeInvoke("local-agent:clear-workspace"),
+    readFile: (filePath) => safeInvoke("local-agent:read-file", filePath),
+    runCommand: (command) => safeInvoke("local-agent:run-command", command),
+  },
 
   // ── Auto-Update ──────────────────────────────────────────
   checkForUpdates: () => safeInvoke("check-for-updates"),
