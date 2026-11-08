@@ -5,6 +5,7 @@ import { normalizeSessionCookieHeader } from "@/lib/providers/webCookieAuth";
 import { buildErrorBody } from "../utils/error.ts";
 import { BaseExecutor, type ExecuteInput, type ProviderCredentials } from "./base.ts";
 import {
+  MuseAiToolJsonError,
   MuseAiToolProtocolError,
   parseMuseAiReply,
   prepareMuseAiRequest,
@@ -17,6 +18,12 @@ import {
 } from "./muse-ai-web/transport.ts";
 
 const PROVIDER = "muse-ai-web";
+const TOOL_JSON_REPAIR_PROMPT =
+  "Your previous tool request was not valid JSON. No tools were dispatched. " +
+  "Repeat the same intended tool call or batch as valid JSON, with no surrounding text. " +
+  "Use only the external client functions and schemas already listed. " +
+  "Use forward slashes for Windows paths and escape any literal backslashes in JSON strings. " +
+  "Wait for the real tool results.";
 
 function cookieHeader(credentials: ProviderCredentials): string {
   const details = credentials.providerSpecificData;
@@ -120,9 +127,31 @@ export class MuseAiWebExecutor extends BaseExecutor {
     const { prompt, toolNames } = prepareMuseAiRequest(input.body);
     if (!prompt) return failure(400, "Muse requires a non-empty text message.");
     try {
-      const text = await this.transport({ cookieHeader: cookie, prompt, signal: input.signal });
-      if (!text.trim()) return failure(502, "Muse returned no response text.");
-      return result(completion(input.model, parseMuseAiReply(text, toolNames), input.stream));
+      let firstReply: ReturnType<typeof parseMuseAiReply> | undefined;
+      let jsonError: MuseAiToolJsonError | undefined;
+      const text = await this.transport({
+        cookieHeader: cookie,
+        prompt,
+        signal: input.signal,
+        repairPrompt: toolNames.size
+          ? (reply) => {
+              try {
+                firstReply = parseMuseAiReply(reply, toolNames);
+              } catch (error) {
+                if (!(error instanceof MuseAiToolProtocolError)) throw error;
+                if (error instanceof MuseAiToolJsonError) {
+                  jsonError = error;
+                  return TOOL_JSON_REPAIR_PROMPT;
+                }
+              }
+              return undefined;
+            }
+          : undefined,
+      });
+      if (!text.trim() && !jsonError) return failure(502, "Muse returned no response text.");
+      const reply = firstReply ?? parseMuseAiReply(text, toolNames);
+      if (jsonError && !reply.toolCalls.length) throw jsonError;
+      return result(completion(input.model, reply, input.stream));
     } catch (error) {
       if (error instanceof MuseAiToolProtocolError) {
         return failure(502, error.message + " No tools were dispatched.");

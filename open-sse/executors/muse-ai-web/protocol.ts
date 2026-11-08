@@ -17,7 +17,7 @@ function messageText(value: unknown): string {
     .join("\n");
 }
 
-const TOOL_PROTOCOL = `The functions below run on the external coding client. For local files and shell commands, use these client_ functions, not the Muse cloud filesystem. Request a tool, wait for its real result, then continue. Do not claim work completed without that result.
+const TOOL_PROTOCOL = `The functions below run on the external coding client. For local files and shell commands, use these client_ functions, not the Muse cloud filesystem. Request a tool, wait for its real result, then continue. Do not claim work completed without that result. The listed client functions are available through the coding client even when the Muse web page itself has no local tools.
 
 For a tool request, return one valid JSON block like {"name":"client_tool_name","arguments":{}}. Use a JSON array for multiple requests. Use only the listed function names and their schemas. Output each batch once. Use forward slashes for Windows paths, for example C:/Users/example/file.txt. Escape every literal backslash in JSON strings, including in shell commands. If no more tools are needed, answer normally without printing tool call examples.
 
@@ -59,6 +59,8 @@ export function prepareMuseAiRequest(body: unknown): { prompt: string; toolNames
 }
 
 export class MuseAiToolProtocolError extends Error {}
+
+export class MuseAiToolJsonError extends MuseAiToolProtocolError {}
 
 export type MuseAiToolCall = {
   id: string;
@@ -151,7 +153,7 @@ function parseBatch(items: unknown[], toolNames: Set<string>): MuseAiToolCall[] 
       try {
         args = JSON.parse(args);
       } catch {
-        throw new MuseAiToolProtocolError("Muse returned invalid JSON tool arguments.");
+        throw new MuseAiToolJsonError("Muse returned invalid JSON tool arguments.");
       }
     }
     if (!isObject(args))
@@ -188,7 +190,7 @@ export function parseMuseAiReply(
       value = JSON.parse(candidate);
     } catch {
       if (toolHint(candidate)) {
-        throw new MuseAiToolProtocolError(
+        throw new MuseAiToolJsonError(
           "Muse returned invalid tool JSON. Use valid JSON and forward-slash Windows paths."
         );
       }

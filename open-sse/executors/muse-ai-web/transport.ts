@@ -19,6 +19,7 @@ export type MuseAiTransport = (options: {
   cookieHeader: string;
   prompt: string;
   signal?: AbortSignal | null;
+  repairPrompt?: (reply: string) => string | undefined;
 }) => Promise<string>;
 
 export class MuseAiTransportError extends Error {
@@ -149,7 +150,22 @@ async function waitForReply(
   }
 }
 
-export const completeMuseAi: MuseAiTransport = async ({ cookieHeader, prompt, signal }) => {
+export async function exchangeMuseAiReply(
+  send: (prompt: string) => Promise<string>,
+  prompt: string,
+  repairPrompt?: (reply: string) => string | undefined
+): Promise<string> {
+  const reply = await send(prompt);
+  const correction = repairPrompt?.(reply);
+  return correction ? send(correction) : reply;
+}
+
+export const completeMuseAi: MuseAiTransport = async ({
+  cookieHeader,
+  prompt,
+  signal,
+  repairPrompt,
+}) => {
   const cookies = parseCookies(cookieHeader);
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const operation = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -167,9 +183,17 @@ export const completeMuseAi: MuseAiTransport = async ({ cookieHeader, prompt, si
     await context.addCookies(cookies);
     const page = await context.newPage();
     await openComposer(page);
-    const baseline = await page.evaluate(readMuseSnapshot);
-    await submitPrompt(page, prompt);
-    return await waitForReply(page, baseline, operation);
+    // Lượt sửa dùng lại trang và cuộc chat đang mở, với mốc phản hồi mới.
+    return await exchangeMuseAiReply(
+      async (message) => {
+        operation.throwIfAborted();
+        const baseline = await page.evaluate(readMuseSnapshot);
+        await submitPrompt(page, message);
+        return waitForReply(page, baseline, operation);
+      },
+      prompt,
+      repairPrompt
+    );
   } catch (error) {
     if (signal?.aborted) throw new MuseAiTransportError(499, "The Muse request was cancelled.");
     if (timeout.aborted || (error instanceof Error && error.name === "TimeoutError")) {
