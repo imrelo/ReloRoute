@@ -1,0 +1,105 @@
+name: Publish completed ReloRoute installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g. v0.1.1)"
+        required: true
+        type: string
+      build_run_id:
+        description: "Run ID of Build Electron Desktop App"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: reloroute-release-assets-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'imrelo/ReloRoute' && github.ref == 'refs/heads/reloroute'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Verify build run and installer tests
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          endpoint="repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID"
+          build_sha=$(gh api "$endpoint" --jq '
+            select(.head_repository.full_name == env.GITHUB_REPOSITORY
+              and .head_branch == "reloroute"
+              and .path == ".github/workflows/electron-release.yml"
+              and .event == "workflow_dispatch") | .head_sha
+          ')
+          [[ "$build_sha" =~ ^[0-9a-f]{40}$ ]]
+          gh api "$endpoint/jobs?per_page=100" --jq '
+            [.jobs[] | select(.conclusion == "success") | .name]
+          ' | jq -e 'contains(["Build Electron (windows)", "Build Electron (linux)"])'
+          echo "sha=$build_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows installers
+        uses: actions/download-artifact@v8
+        with:
+          name: electron-windows
+          path: installers/windows
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download Linux installers
+        uses: actions/download-artifact@v8
+        with:
+          name: electron-linux
+          path: installers/linux
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Publish installers to GitHub Releases
+        shell: bash
+        env:
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          compgen -G "installers/windows/*Setup*$version*.exe" >/dev/null
+          compgen -G "installers/linux/*$version*.AppImage" >/dev/null
+          compgen -G "installers/linux/*$version*.deb" >/dev/null
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$VERSION" --jq '
+            .[] | select(.ref == ("refs/tags/" + env.VERSION)) | .object.sha
+          ')
+          [[ -z "$tag_sha" || "$tag_sha" == "$BUILD_SHA" ]]
+
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq 'select(.isDraft == false)' | grep -q .; then
+            gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '
+              [.assets[] | .name] |
+              any(endswith(".exe")) and any(endswith(".AppImage")) and any(endswith(".deb"))
+            ' | grep -qx true
+            exit 0
+          fi
+
+          # Chỉ đính kèm đúng loại file mà workflow desktop dùng để phát hành.
+          mapfile -d '' assets < <(find installers -type f \( \
+            -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.blockmap' \
+            -o -name 'latest*.yml' -o -name 'optional-pack-*.tar.gz' \
+            \) -print0)
+          notes="$RUNNER_TEMP/reloroute-release-notes.md"
+          cat > "$notes" <<EOF
+          Windows and Linux installers for ReloRoute $VERSION, including the Muse AI Web provider.
+
+          macOS installers are pending. See [the desktop build](https://github.com/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID) for platform status.
+          EOF
+          gh release create "$VERSION" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+            --title "ReloRoute $VERSION" --target "$BUILD_SHA" --notes-file "$notes"
