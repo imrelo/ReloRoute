@@ -25,7 +25,8 @@
     "pack": "npm run prepare:bundle && electron-builder --dir"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "electron": "^45.0.0",
@@ -70,6 +71,7 @@
       "lib/serverReadiness.js",
       "lib/healthWatchdog.js",
       "lib/windowClosePolicy.js",
+      "lib/localAgent.js",
       "assets/remoteServerPrompt.html",
       "package.json",
       "node_modules/**/*"

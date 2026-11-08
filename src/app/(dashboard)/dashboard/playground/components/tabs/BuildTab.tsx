@@ -6,12 +6,13 @@ import Icon from "@/shared/components/Icon";
 
 // src/app/(dashboard)/dashboard/playground/components/tabs/BuildTab.tsx
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToolsBuilder } from "../../hooks/useToolsBuilder";
 import { useStructuredOutput } from "../../hooks/useStructuredOutput";
 import MarkdownMessage from "../MarkdownMessage";
 import BuildWizard from "./build/BuildWizard";
+import LocalAgentPanel, { type LocalAgentApi } from "./LocalAgentPanel";
 import type { ConfigState } from "../StudioConfigPane";
 
 interface BuildTabProps {
@@ -63,6 +64,23 @@ export default function BuildTab({ configState }: BuildTabProps) {
     error?: string;
   } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [localAgentApi, setLocalAgentApi] = useState<LocalAgentApi | null>(null);
+  const [showLocalAgent, setShowLocalAgent] = useState(false);
+
+  useEffect(() => {
+    const bridge = window.electronAPI?.localAgent;
+    if (!bridge) return;
+    let active = true;
+    void bridge.isAvailable().then(
+      (available) => {
+        if (active && available) setLocalAgentApi(bridge);
+      },
+      () => undefined
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function buildRequestBody(msgs: Message[]) {
     const body: Record<string, unknown> = {
@@ -311,15 +329,33 @@ export default function BuildTab({ configState }: BuildTabProps) {
     </div>
   );
 
+  if (localAgentApi && showLocalAgent) {
+    return <LocalAgentPanel api={localAgentApi} onExit={() => setShowLocalAgent(false)} />;
+  }
+
   return (
-    <BuildWizard
-      toolsBuilder={toolsBuilder}
-      structuredOutput={structuredOutput}
-      running={running}
-      onRun={() => void handleRun()}
-      prompt={prompt}
-      setPrompt={setPrompt}
-      result={resultArea}
-    />
+    <>
+      {localAgentApi && (
+        <div className="mb-3 flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={running}
+            onClick={() => setShowLocalAgent(true)}
+          >
+            Local Agent
+          </Button>
+        </div>
+      )}
+      <BuildWizard
+        toolsBuilder={toolsBuilder}
+        structuredOutput={structuredOutput}
+        running={running}
+        onRun={() => void handleRun()}
+        prompt={prompt}
+        setPrompt={setPrompt}
+        result={resultArea}
+      />
+    </>
   );
 }

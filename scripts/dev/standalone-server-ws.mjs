@@ -314,6 +314,16 @@ http.createServer = function createServerWithResponsesWs(...args) {
   // sd_notify READY once the main listener is actually accepting, then arm
   // the watchdog keep-alive interval (unref'd — never keeps the process up).
   server.once("listening", () => {
+    const address = server.address();
+    // Chỉ báo Electron sau khi tiến trình này thực sự chiếm được cổng loopback.
+    if (
+      process.connected &&
+      !tlsOptions &&
+      address?.address === "127.0.0.1" &&
+      address.port === Number(process.env.PORT)
+    ) {
+      process.send?.({ type: "reloroute:embedded-listener-ready", port: address.port }, () => {});
+    }
     // Next reads NEXT_MANUAL_SIG_HANDLE synchronously in its own 'listening' handler, which runs
     // right after this one; clear it on the next turn so child processes never inherit it.
     if (ownsNextSignalEnv) {
