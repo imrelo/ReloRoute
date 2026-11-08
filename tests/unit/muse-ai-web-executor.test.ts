@@ -6,6 +6,7 @@ import {
   parseMuseAiReply,
   prepareMuseAiRequest,
 } from "../../open-sse/executors/muse-ai-web/protocol.ts";
+import { exchangeMuseAiReply } from "../../open-sse/executors/muse-ai-web/transport.ts";
 
 const windowsPath = "C:/Users/example/project/counter.txt";
 const nestedSchema = {
@@ -106,6 +107,80 @@ test("Muse rejects malformed Windows paths and unknown tools without leaking raw
     assert.match(error.error.message, /No tools were dispatched/);
     assert.doesNotMatch(error.error.message, /client_read|fixture_only/);
   }
+});
+
+test("Muse repairs invalid tool JSON in the same exchange before Orca receives a tool call", async () => {
+  const invalid = '{"name":"client_read","arguments":{"path":"C:\\Users\\example\\counter.txt"}}';
+  const prompts: string[] = [];
+  const executor = new MuseAiWebExecutor(({ prompt, repairPrompt }) =>
+    exchangeMuseAiReply(
+      async (message) => {
+        prompts.push(message);
+        return prompts.length === 1 ? invalid : JSON.stringify(read);
+      },
+      prompt,
+      repairPrompt
+    )
+  );
+
+  const { response } = await executor.execute({
+    model: "muse-chat",
+    body,
+    stream: false,
+    credentials: { apiKey: mockCookie },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /valid JSON/i);
+  assert.doesNotMatch(prompts[1], /fixture_only|counter\.txt/);
+  const { choices } = await response.json();
+  assert.equal(choices[0].finish_reason, "tool_calls");
+  assert.equal(choices[0].message.tool_calls.length, 1);
+  assert.equal(choices[0].message.tool_calls[0].function.name, "read");
+  assert.deepEqual(JSON.parse(choices[0].message.tool_calls[0].function.arguments), read.arguments);
+});
+
+test("Muse tries tool JSON repair only once and dispatches nothing if it fails", async () => {
+  const invalid = '{"name":"client_read","arguments":';
+  for (const repaired of [invalid, "I cannot run the local tool."]) {
+    let turns = 0;
+    const executor = new MuseAiWebExecutor(({ prompt, repairPrompt }) =>
+      exchangeMuseAiReply(async () => (++turns === 1 ? invalid : repaired), prompt, repairPrompt)
+    );
+    const { response } = await executor.execute({
+      model: "muse-chat",
+      body,
+      stream: false,
+      credentials: { apiKey: mockCookie },
+    });
+    assert.equal(turns, 2);
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).error.message, /No tools were dispatched/);
+  }
+});
+
+test("Muse does not retry a tool name that Orca did not offer", async () => {
+  let turns = 0;
+  const executor = new MuseAiWebExecutor(({ prompt, repairPrompt }) =>
+    exchangeMuseAiReply(
+      async () => {
+        turns++;
+        return JSON.stringify({ name: "client_unknown", arguments: {} });
+      },
+      prompt,
+      repairPrompt
+    )
+  );
+  const { response } = await executor.execute({
+    model: "muse-chat",
+    body,
+    stream: false,
+    credentials: { apiKey: mockCookie },
+  });
+  assert.equal(turns, 1);
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error.message, /tool that was not offered/);
 });
 
 test("Muse preserves ordinary JSON and an exact compaction summary", async () => {
